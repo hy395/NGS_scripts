@@ -33,7 +33,7 @@ collapse.pairwise.celltype.peaks <- function (peaks1, peaks2, overlap.ratio.cuto
   or <- find.overlap.ratio (peaks1, peaks2)
   common <- or$best.common[or$overlap.ratio[or$best.common] > overlap.ratio.cutoff]
   union <- GRanges (seqnames (peaks1)[or$overlaps[common,1]],
-                    IRanges (or$ranges[common,2], or$ranges[common,3]))
+                    IRanges (or$ranges[common,1], or$ranges[common,4])) # modified from Manu's code. He's taking the intersection, I am taking the union.
   ## Overlapping peaks with ratio < overlap.ratio.cutoff
   peaks1 <- peaks1[countOverlaps (peaks1, union) == 0]
   peaks2 <- peaks2[countOverlaps (peaks2, union) == 0]    
@@ -74,22 +74,24 @@ mergeCTpeaks <- function(pkLst) {
 # add annotation for atlas #
 ############################
 # atlas needs to be named
-makeGTF1<-function(){
- annotationTable<-fread("~/programs/genomes/hg19.refseq.gtf")
- temp<-gsub("gene_id \"","",annotationTable$V9)
- annotationTable$gene_id<-gsub("\".*","",temp)
- annotationTable$symbol<-NA
- temp<-gsub(".*transcript_id \"","",annotationTable$V9)
- annotationTable$transcript_id<-gsub("\";","",temp)
- human <- useMart(host="www.ensembl.org",biomart='ENSEMBL_MART_ENSEMBL', dataset="hsapiens_gene_ensembl")
- map <- getBM(attributes=c("hgnc_symbol","refseq_mrna"), filters ="refseq_mrna",values=annotationTable$gene_id, mart=human)
- map <- map[!duplicated(map[,2]),]; rownames(map) <- map[,2]
- annotationTable$symbol <- map[annotationTable$gene_id,1] 
- a<-annotationTable[,list(seqname=V1,annot=V3,start=V4,end=V5,strand=V7,symbol=symbol,transcript_id=transcript_id)]
- a$width<-abs(a$end-a$start)+1
- a<-a[a$seqname%in%c(paste0("chr", 1:22), "chrX", "chrY"),]
- return(a)
+library(org.Hs.eg.db)
+makeGTF1 <- function(){
+  annotationTable<-fread("~/programs/genomes/hg19.refseq.gtf")
+  temp<-gsub("gene_id \"","",annotationTable$V9)
+  annotationTable$gene_id<-gsub("\".*","",temp)
+  annotationTable$symbol<-NA
+  temp<-gsub(".*transcript_id \"","",annotationTable$V9)
+  annotationTable$transcript_id<-gsub("\";","",temp)
+  map <- select(org.Hs.eg.db, keys=annotationTable$gene_id, columns=c("REFSEQ","SYMBOL"), keytype="REFSEQ")
+  map <- map[!duplicated(map[,1]),]
+  rownames(map) <- map[,1]
+  annotationTable$symbol <- map[annotationTable$gene_id,2] 
+  a <- annotationTable[,list(seqname=V1,annot=V3,start=V4,end=V5,strand=V7,symbol=symbol,transcript_id=transcript_id)]
+  a$width<-abs(a$end-a$start)+1
+  a<-a[a$seqname%in%c(paste0("chr", 1:22), "chrX", "chrY"),]
+  return(a)
 }
+
 makeGTF2<-function(){
   annot1<-readRDS("~/programs/genomes/Homo_sapiens.GRCh37.75.rds")
   output<-data.table(seqname = as.vector(annot1@seqnames), annot = annot1$type, start = start(annot1), end = end(annot1),
