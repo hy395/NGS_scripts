@@ -40,7 +40,7 @@ STAR --genomeLoad NoSharedMemory --genomeDir ${GENOME_DIR} \
 
 # filtering
 BAM=${OUTDIR}/${SAMPLE}.bam
-samtools view -h ${BAM}|grep -v "XS:"|samtools view -bh -F 0x204 -q 10 -S - > ${BAM/.bam/.filter.bam}
+samtools view -h ${BAM}|samtools view -bh -F 0x204 -q 10 -S - > ${BAM/.bam/.filter.bam}
 samtools index ${BAM/.bam/.filter.bam}
 samtools flagstat ${BAM/.bam/.filter.bam} > ${BAM/.bam/.filter.flagstat}
 

@@ -1,3 +1,47 @@
+# read narrowPeak files
+readPeak<-function(peakFile){
+  summitFile <- gsub("_peaks.narrowPeak","_summits.bed",peakFile)
+  peak <- fread(peakFile)
+  peak <- peak[, list(chr = V1, start = V2, stop = V3, neglog10p = V8, fc = V7, neglog10q = -1)]
+  peakSummits <- fread(summitFile)
+  peak$summit <- peakSummits$V2
+  peakGR <- GRanges(seqnames = peak$chr,
+                    ranges = IRanges(start = peak$start,end = peak$stop),
+                    strand = "*", summit=peak$summit, neglog10p=peak$neglog10p)
+  names(peakGR) <- 1:length(peakGR)
+  return(peakGR)
+}
+
+# read Bam files
+readBam<-function(bam,predictd,bigWig=NULL){
+  # maybe in the future I should extend each read instead of shift.
+  shift <- floor(predictd/2)
+
+  print(paste0("read bam from: ",bam))
+  print(paste0("shift length is: ",shift))
+  print(paste0("save output bigwig to: ",bigWig))
+  
+  #specify an output file name if want to output a BigWig coverage file.
+  #read alignment
+  aln<-readGAlignments(bam)
+  aln<-as(aln,"GRanges")
+  
+  #shift alignment by size shift
+  aln[strand(aln)=="+"]<- GenomicRanges::shift(aln[strand(aln)=="+"],shift)
+  aln[strand(aln)=="-"]<- GenomicRanges::shift(aln[strand(aln)=="-"],-shift)
+
+  #scale to get read per million and output to BigWig
+  if(!is.null(bigWig)){
+    scalingFactor<-1e6/length(aln)
+    #calculate coverage
+    cov1<-coverage(aln)
+    cov1<-cov1*scalingFactor
+    export.bw(cov1,bigWig)    
+  }  
+  return(aln)
+  
+}
+
 #merge peaks
 collapse.pairwise.celltype.peaks <- function (peaks1, peaks2, overlap.ratio.cutoff=0.75) {
   ## Function to find overlapping ratios
@@ -90,6 +134,23 @@ makeGTF1 <- function(){
   a$width<-abs(a$end-a$start)+1
   a<-a[a$seqname%in%c(paste0("chr", 1:22), "chrX", "chrY"),]
   return(a)
+}
+
+add_annot1 <- function(atlas) {
+  # use REFSEQ annotation here.
+  # only consider annotated genes.
+  annot <- makeGTF1()
+  annot <- annot[!is.na(symbol),]
+  annot <- annot[symbol!=""]
+  match <- annotateSites(atlas, annot) # match is not the same order as atlas
+  setkey(match,peak_id);match <- match[names(atlas)] # reorder match
+  id2symbol <- unique(annot[,list(transcript_id, symbol)])
+  setkey(id2symbol, transcript_id)
+  match$symbol <- id2symbol[match$transcript_id, symbol]
+  atlas$annot <- match$annot
+  atlas$transcript_id <- match$transcript_id
+  atlas$gene_name <- match$symbol
+  return(atlas)
 }
 
 makeGTF2<-function(){
@@ -216,7 +277,7 @@ dist2TSS <- function(sitesGR, annotationTab) {
                               dist = distToNearestTss)
   return(nearestTssTab)
 }
-add_annot <- function(atlas) {
+add_annot2 <- function(atlas) {
   # atlas need to be named
   mapping <- makeGTF2()
   match <- annotateSites(atlas, mapping[[1]]) # match is not the same order as atlas
