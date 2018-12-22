@@ -62,13 +62,13 @@ volcano<-function(res.df,log2FoldThres,padjThres,sig.genes=NULL,main){
   #sig.genes is the genes that I want to label, in ensembl_gene_id
   x<-res.df$log2FoldChange
   y<-res.df$padj
-  plot(x,-log10(y),main=main,xlab="",ylab="-log10 Padj")
+  plot(x,-log10(y),main=main,xlab="",ylab="-log10 Padj",pch=20)
   downRows<-x<(-log2FoldThres)&y<padjThres;downRows[is.na(downRows)]<-FALSE
   upRows<-x>log2FoldThres&y<padjThres;upRows[is.na(upRows)]<-FALSE
   mtext(paste("total genes: ",length(downRows),"; up-regulated genes: ",sum(upRows,na.rm=T),"; down-regulated genes: ",sum(downRows,na.rm=T),sep=""), side=1,line=2)
   cat(sprintf("total genes: %i\nup-regulated genes: %i\ndown-regulated genes: %i\n",length(downRows),sum(upRows,na.rm=T),sum(downRows,na.rm=T)))
-  points(x[downRows],-log10(y[downRows]),col="blue")
-  points(x[upRows],-log10(y[upRows]),col="red")
+  points(x[downRows],-log10(y[downRows]),col="blue",pch=20)
+  points(x[upRows],-log10(y[upRows]),col="red",pch=20)
   #if fed sig.genes list
   if (!is.null(sig.genes)){
     #plot signature genes
