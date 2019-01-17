@@ -238,6 +238,25 @@ runGSEA <- function(label_file, expr_file, gmt_file, compare, mem_size, permute_
   system(cmd)  
 }
 
+################
+# GSEA prerank #
+################
+gseaPrerank <- function(dds_res, outdir, gmt_file, rpt_label, mem_size, out_name) {
+  dir.create(outdir, recursive=T)
+  towrite <- cbind(rownames(dds_res), round(dds_res$log2FoldChange,3))
+  write.table(towrite, file=paste0(outdir,"rank_list.rnk"), sep="\t", col.names=F, row.names=F, quote=F)
+  
+  cmd <- paste0("java -cp /home/hy395/programs/bin/gsea-3.0.jar -Xmx" , mem_size, "m xtools.gsea.GseaPreranked",
+                " -gmx ",gmt_file,
+                " -rnk ", outdir, "rank_list.rnk",
+                " -rpt_label ", rpt_label,
+                " -out ",out_name,
+                " -gui false")
+  system(cmd) 
+}
+#gseaPrerank(res[[1]], "GSEA_prerank/AvP/", "~/programs/genomes/msigdb/c2_c5.gmt", "A_versus_P", 1024, "GSEA_prerank/AvP/A_versus_P")
+
+
 
 ###########
 # Heatmap #
