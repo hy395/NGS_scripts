@@ -1,4 +1,6 @@
 # read narrowPeak files
+library(data.table)
+library(rtracklayer)
 readPeak<-function(peakFile){
   summitFile <- gsub("_peaks.narrowPeak","_summits.bed",peakFile)
   peak <- fread(peakFile)
@@ -142,6 +144,17 @@ add_annot1 <- function(atlas) {
   annot <- makeGTF1()
   annot <- annot[!is.na(symbol),]
   annot <- annot[symbol!=""]
+  
+  # annotation of transcriptsl, shouldn't use genes, b/c different genes sometimes have same name, can't combine.
+  transcripts <- unique(annot[, list(start = min(start), end = max(end), symbol = symbol), by = list(transcript_id, seqname, strand)])
+  transcriptsGR <- GRanges(seqnames = transcripts$seqname,
+                           ranges = IRanges(start = transcripts$start,end = transcripts$end),
+                           strand = transcripts$strand,
+                           transcript_id = transcripts$transcript_id,
+                           symbol = transcripts$symbol)
+  names(transcriptsGR) <- transcriptsGR$transcript_id
+  nearestGene <- nearest(x = atlas,subject = transcriptsGR, ignore.strand=T)
+
   match <- annotateSites(atlas, annot) # match is not the same order as atlas
   setkey(match,peak_id);match <- match[names(atlas)] # reorder match
   id2symbol <- unique(annot[,list(transcript_id, symbol)])
@@ -150,10 +163,12 @@ add_annot1 <- function(atlas) {
   atlas$annot <- match$annot
   atlas$transcript_id <- match$transcript_id
   atlas$gene_name <- match$symbol
+  atlas$distToNearest <- distance(x = atlas,y = transcriptsGR[nearestGene])
   return(atlas)
 }
 
-makeGTF2<-function(){
+
+makeGTF2 <- function(){
   annot1<-readRDS("~/programs/genomes/Homo_sapiens.GRCh37.75.rds")
   output<-data.table(seqname = as.vector(annot1@seqnames), annot = annot1$type, start = start(annot1), end = end(annot1),
                      strand=as.vector(strand(annot1)),symbol=annot1$gene_name,transcript_id=annot1$transcript_id,width=width(annot1))
@@ -163,8 +178,13 @@ makeGTF2<-function(){
   mapping<-unique(mcols(annot1)[,c("transcript_id","gene_name","gene_biotype")])
   mapping<-mapping[!is.na(mapping[,1]),]
   rownames(mapping)<-mapping[,1]
+  map <- select(org.Hs.eg.db, keys=mapping$gene_name, columns=c("SYMBOL","GENENAME"), keytype="SYMBOL")
+  map <- map[!duplicated(map[,1]),]
+  rownames(map) <- map[,1]
+  mapping$full_name <- map[mapping$gene_name,"GENENAME"]
   return(list(output,mapping))
 }
+
 annotateSites <- function(sitesGR, annotationTab) {  
   # change it to a transcript table, where all rows of the same transcript becomes the same, with the same start and end site
   #transcripts <- annotationTab[, list(start = min(start), end = max(end), symbol = symbol), by = list(transcript_id, seqname, strand)]
