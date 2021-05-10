@@ -29,6 +29,7 @@ get.seqs <- function (org, regions, no.cores = 1) {
   return(all.seqs)
 }
 
+library(ggplot2)
 draw_diamond <- function(rna.data, atac.data, genes=NULL, top.n=NULL, max.gene.dist=50000, diamond.dist=0.1) {
   # inspired by Yuri's code for drawing
   # @rna.data requires column: gene, log2FC, padj
@@ -36,6 +37,9 @@ draw_diamond <- function(rna.data, atac.data, genes=NULL, top.n=NULL, max.gene.d
   # @either genes or top.n need to be specified
   
   # data preparation
+  rna.data$gene <- as.character(rna.data$gene)
+  atac.data$gene <- as.character(atac.data$gene)
+
   rna.data <- rna.data[rna.data$gene %in% atac.data$gene,] # only consider genes with atac peak
   rownames(rna.data) <- rna.data$gene
   atac.data <- atac.data[atac.data$gene.dist <= max.gene.dist, ]
@@ -67,12 +71,19 @@ draw_diamond <- function(rna.data, atac.data, genes=NULL, top.n=NULL, max.gene.d
   })
   toplot2 <- do.call(rbind, toplot2)
   
+  # set maximum and min value of atac log2FC to be 75% quantile
+  max_val <- quantile(toplot2$log2FC[toplot2$log2FC>0], 0.75)
+  min_val <- quantile(toplot2$log2FC[toplot2$log2FC<0], 0.25)
+  toplot2$log2FC[toplot2$log2FC>max_val] <- max_val
+  toplot2$log2FC[toplot2$log2FC<min_val] <- min_val
+
+
   # plot all
   y_max <- max(abs(toplot1$log2FC))+1
   p <- ggplot(toplot1,  aes(rank, log2FC, label = gene)) + 
     geom_text(aes(angle=90), hjust = 1) +
     geom_point(data=toplot2, aes(x, y, color=log2FC)) +
-    geom_point(data=toplot2, aes(x, y), shape=1) +
+    geom_point(data=toplot2, aes(x, y), shape=1, size=2, stroke=0.2) +
     labs(colour = "ATAC_log2FC") +
     scale_colour_gradient2(low="royalblue3", mid="white", high="firebrick3", midpoint = 0) +
     theme_classic() +  ylim(-y_max,y_max) + xlab("") + ylab("RNA_log2FC") +

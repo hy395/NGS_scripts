@@ -97,18 +97,22 @@ volcano<-function(res.df,log2FoldThres,padjThres,sig.genes=NULL,main){
 ###############
 # GO analysis #
 ###############
+
 runGOstats <- function(genes, genes.all, conditional = TRUE, p.value =
-                         0.05, ontology = c('BP', 'MF', 'CC'),
+                         0.05, ontology = 'BP',
                        annotation = 'org.Hs.eg.db',
                        testDirection = 'over', KEGG=FALSE) {
   # Run a single GO enrichment test
   if (length(genes) == 0) {
     return (NULL)
   }
-  if (all(is.na(select(org.Hs.eg.db, keys = genes, columns = "ONTOLOGY", keytype = "ENTREZID")$ONTOLOGY))) {
+    
+  # make sure there are BP GO terms
+  cmd <- paste0( "ontology_tmp <- select(",annotation,", keys = genes, columns = 'ONTOLOGY', keytype = 'ENTREZID')")
+  eval(parse(text=cmd))
+  if (sum(ontology_tmp$ONTOLOGY==ontology, na.rm=T)==0) {
     return(NULL)
   }
-  ontology <- match.arg(ontology)
   genes <- as.character(genes)
   genes.all <- as.character(genes.all)
   if (KEGG==TRUE){
@@ -126,17 +130,27 @@ runGOstats <- function(genes, genes.all, conditional = TRUE, p.value =
     go.res <- hyperGTest(params)
     go.res
   }
+  return(go.res)
 }
 
+
 #create my summary of GO result
-mySummary<-function(GOresult,minCount){
+mySummary<-function(GOresult,minCount,annotation=org.Hs.eg.db){
   if (is.null(GOresult)) {
-    return(NA)
+    return(NULL)
   }
-  ids.symbols<-select(org.Hs.eg.db, keys=GOresult@geneIds,columns= c("SYMBOL"),keytype="ENTREZID")
+  ids.symbols<-select(annotation, keys=GOresult@geneIds,columns= c("SYMBOL"),keytype="ENTREZID")
   GOresult.summ<-summary(GOresult)
+  if (nrow(GOresult.summ)==0) {
+    return(NULL)
+  }
+  if (colnames(GOresult.summ)[1]=="GOBPID") GOresult.summ$ontology <- "BP"
+  if (colnames(GOresult.summ)[1]=="GOMFID") GOresult.summ$ontology <- "MF"
+  if (colnames(GOresult.summ)[1]=="GOCCID") GOresult.summ$ontology <- "CC"
+  colnames(GOresult.summ)[1] <- "GOID"
+
   gos<-GOresult.summ[,1]
-  a<-select(org.Hs.eg.db, keys=gos,columns= c("SYMBOL"),keytype="GOALL")
+  a<-select(annotation, keys=gos,columns= c("SYMBOL"),keytype="GOALL")
   a.list<-split(a,a$GOALL)
   genes<-vector()
   for (i in 1:length(a.list)){
@@ -145,9 +159,10 @@ mySummary<-function(GOresult,minCount){
     genes[i]<-overlap.collapse
   }
   genes.collapse<-cbind(names(a.list),genes)
-  rownames(GOresult.summ)<-GOresult.summ$GOBPID
-  GOresult.summ[genes.collapse[,1],"genes"]<-genes.collapse[,2]
-  GOresult.summ[GOresult.summ$Count>=minCount,]
+  rownames(GOresult.summ)<-GOresult.summ[,1]
+  GOresult.summ[genes.collapse[,1],"genes"] <- genes.collapse[,2]
+  GOresult.summ <- GOresult.summ[GOresult.summ$Count>=minCount,]
+  return(GOresult.summ)
 }
 
 #MAplot, volcano plot, list of peaks go analysis
@@ -241,21 +256,21 @@ runGSEA <- function(label_file, expr_file, gmt_file, compare, mem_size, permute_
 ################
 # GSEA prerank #
 ################
-gseaPrerank <- function(dds_res, outdir, gmt_file, rpt_label, mem_size, out_name) {
+gseaPrerank <- function(named_log2fc, outdir, gmt_file, rpt_label, mem_size) {
   dir.create(outdir, recursive=T)
-  towrite <- cbind(rownames(dds_res), round(dds_res$log2FoldChange,3))
+  towrite <- cbind(names(named_log2fc), round(named_log2fc,3))
   write.table(towrite, file=paste0(outdir,"rank_list.rnk"), sep="\t", col.names=F, row.names=F, quote=F)
   
-  cmd <- paste0("java -cp /home/hy395/programs/bin/gsea-3.0.jar -Xmx" , mem_size, "m xtools.gsea.GseaPreranked",
+  cmd <- paste0("java -cp /home/yuanh/programs/bin/gsea-3.0.jar -Xmx" , mem_size, "m xtools.gsea.GseaPreranked",
                 " -gmx ",gmt_file,
                 " -rnk ", outdir, "rank_list.rnk",
                 " -rpt_label ", rpt_label,
-                " -out ",out_name,
+                " -out ",outdir,
+		" -set_max 2000",
                 " -gui false")
   system(cmd) 
 }
-#gseaPrerank(res[[1]], "GSEA_prerank/AvP/", "~/programs/genomes/msigdb/c2_c5.gmt", "A_versus_P", 1024, "GSEA_prerank/AvP/A_versus_P")
-
+#gseaPrerank(res[[1]], "GSEA_prerank/AvP/", "~/programs/genomes/msigdb/c2_c5.gmt", "A_versus_P", 1024)
 
 
 ###########
