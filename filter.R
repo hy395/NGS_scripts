@@ -12,7 +12,7 @@ gr <- GRanges(seqnames=a$V1, ranges=IRanges(as.numeric(a$V2), as.numeric(a$V3)),
               score=as.numeric(a$V5), signalValue=as.numeric(a$V7), summit=as.numeric(a$V10), localIDR=as.numeric(a$V11), globalIDR=as.numeric(a$V12))
 thres <- -125*log2(p.value)
 
-gr <- keepSeqlevels(gr, paste0("chr",c(1:22,"X","Y","M")))
+gr <- keepSeqlevels(gr, paste0("chr",c(1:22,"X","Y","M")), pruning.mode="coarse")
 gr <- gr[gr$score>thres]
 
 blacklist <- NULL
