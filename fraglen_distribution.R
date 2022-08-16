@@ -1,6 +1,7 @@
 ################################
 # compute fragment length dist #
 ################################
+# run on _SE.bed files
 library(data.table)
 
 options(echo=TRUE)

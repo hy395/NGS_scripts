@@ -27,9 +27,9 @@ start(aln[strand(aln)=="-"]) <- end(aln[strand(aln)=="-"])
 aln <- resize(aln, fix="center", width = smooth_window)
 print("shifted bam file.")
 
-scalingFactor<-1e6/length(aln)
+scalingFactor<-length(aln)/1e6
 cov1<-coverage(aln)
-cov1<-cov1*scalingFactor
+cov1<-cov1/scalingFactor
 print("finish creating coverage file.")
 
 # save the bigwig file

@@ -272,34 +272,3 @@ gseaPrerank <- function(named_log2fc, outdir, gmt_file, rpt_label, mem_size) {
 }
 #gseaPrerank(res[[1]], "GSEA_prerank/AvP/", "~/programs/genomes/msigdb/c2_c5.gmt", "A_versus_P", 1024)
 
-
-###########
-# Heatmap #
-###########
-countBin<-function(bam,peakBin, window_size){
-  vectorized_m<-countOverlaps(peakBin,bam)
-  output<-matrix(vectorized_m,ncol=window_size,byrow=T)
-  return(output)
-}
-generateMatrix <- function(regions, beds, covs, window_size=1000) {
-  peaks_centered_tiles_gr<- unlist(tile(regions,window_size))
-  
-  # rpm count for each bin
-  bin_matrix <- mclapply(beds, function(x) countBin(x,peaks_centered_tiles_gr, window_size=window_size), mc.cores=40)
-  for (i in 1:length(bin_matrix)){
-    bin_matrix[[i]]<-bin_matrix[[i]]/covs[i]*1e6
-  }
-  # put a cap at the intensity
-  #quantSig <- quantile(sapply(bin_matrix,function(x) apply(x,1,max)))
-  # maxSig <- quantSig["75%"]+1.5*(quantSig["75%"]-quantSig["25%"])
-  # bin_matrix <- lapply(bin_matrix, function(x) {
-  #   x[x>maxSig] <- maxSig
-  #   return(x)
-  # })
-  bin_matrix <- lapply(bin_matrix, function(x) {
-    x[x>1] <- 1
-    return(x)
-  })
-  return(bin_matrix)
-}
-

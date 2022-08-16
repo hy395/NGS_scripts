@@ -1,5 +1,6 @@
-library(org.Hs.eg.db)
 library(rtracklayer)
+library(data.table)
+library(parallel)
 
 read_narrowPeak <- function(narrowPeak_file) {
   extraCols_narrowPeak <- c(singnalValue = "numeric", pValue = "numeric",
@@ -265,7 +266,7 @@ countReads <- function(atlas, bam_file_list, sample_names) {
 # plot pie chart
 piechart<-function(v,outname){
   freq<-table(v)
-  pdf(outname)
+  pdf(outname, 10, 7)
   pie(freq, 
       labels=paste0(names(freq),":",freq), 
       main=paste0("pie chart"))
@@ -275,7 +276,7 @@ piechart<-function(v,outname){
 ###########
 # KS test #
 ###########
-motif_KS <- function (log2FC, outdir, compare, m) {
+motif_KS <- function (log2FC, outdir, compare, m, top_label=10) {
   m_list <- lapply(1:ncol(m), function(i) {
     bound <- log2FC [m[,i]==1]
     return(bound)
@@ -301,17 +302,18 @@ motif_KS <- function (log2FC, outdir, compare, m) {
   }
   
   # plot
+  dir.create(outdir)
   toplot <- data.frame(result)
   toplot$x <- result[,4]
   toplot$y <- ifelse(result[,1]==1, 1, -1) * result[,2]
   toplot$TF <- rownames(toplot)
   toplot$color <- "gray"
-  toplot$color[order(toplot$y)[1:10]] <- "blue"
-  toplot$color[order(toplot$y,decreasing=T)[1:10]] <- "red"
+  toplot$color[order(toplot$y)[1:top_label]] <- "blue"
+  toplot$color[order(toplot$y,decreasing=T)[1:top_label]] <- "red"
   toplot$color <- factor(toplot$color, levels = c("blue","gray","red"))
   fwrite(toplot, file=paste0(outdir, "/fimo_KS_",compare,".csv"))
   
-  pdf(paste0(outdir, "/fimo_KS_",compare,".pdf"))
+  pdf(paste0(outdir, "/fimo_KS_",compare,".pdf"), 10, 10)
   p <- ggplot(toplot, aes(x, y)) + geom_point(aes(x,y,color=color)) +
     xlim(c(0, 50)) + ylim(c(-0.4, 0.4)) + xlab("% motif hits") + ylab("KS statistic") + ggtitle(compare) + theme_classic() +
     #geom_point(data = toplot[toplot$color!="gray", ], aes(x, y, color=color)) +
@@ -324,5 +326,30 @@ motif_KS <- function (log2FC, outdir, compare, m) {
   return(toplot) 
 }
 
+###########
+# Heatmap #
+###########
+plot_tornado <- function(bws, regions, val_min=0, val_max=1) {
+    # @bws: bigwig file paths
+    # @regions: genomicrange object, need to be resize to 2000bp
+    
+    covs <- mclapply(bws, function(x) {import(x,format="bw",as="RleList",which=regions)}, 
+                     mc.cores=length(bws))
+    names(covs) <- gsub(".*/|_S[0-9]*_.*","",bws)
+    matrices <- mclapply(covs, function(x) {
+        return(as.matrix(as(x[regions], "Matrix")))}, mc.cores=length(covs))
 
+    col_fun = colorRamp2(c(val_min, (val_max-val_min)/2, val_max), 
+                         c("#91bfdb", "#ffffbf", "#fc8d59"))
+
+    ht_list = Heatmap(matrices[[1]], name = names(matrices)[1], column_title = names(matrices)[1], 
+                      cluster_rows = FALSE, cluster_columns = FALSE, col = col_fun)
+    
+    for (i in 2:length(matrices)){
+      temp = Heatmap(matrices[[i]], name = names(matrices)[i], column_title = names(matrices)[i], 
+                     cluster_rows = FALSE, cluster_columns = FALSE, col = col_fun)
+      ht_list = ht_list + temp
+    }
+    return(ht_list)
+}
 

@@ -3,7 +3,7 @@ library(rtracklayer)
 #hg19
 chrs<-c(1:22,"X","Y")
 #annotation GRList
-annotations<-readRDS("Homo_sapiens.GRCh37.75.rds")
+annotations<-import('Homo_sapiens.GRCh37.75.gtf.gz')
 annotations<-keepSeqlevels(annotations,chrs)
 genes <- unique(annotations$gene_name)
 exons <- annotations[annotations$type == 'exon']
