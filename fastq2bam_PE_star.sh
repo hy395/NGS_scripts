@@ -1,40 +1,35 @@
 #!/bin/bash
 
-## argments:
-## $1: fastq file 
-## $2: sample name
-## $3: output dir
-## $4: adapter
-## $5: star index
-## $6: dir for star output stats
-## $7: # threads
-
-## this is aligning SE reads with STAR (RNA-seq only). resulting bam files are filtered, but NOT duplicate-removed. updated on 4.18.2017
-## outputs are in the same folder as inputs.
+## this is aligning PE reads with STAR (RNA-seq only). 
+# resulting bam files are filtered, but NOT duplicate-removed. updated on 7.26.23
 
 #############
 # arguments #
 #############
 
 # param defaults
-OUTDIR='bams'
-ADAPTER='/home/yuanh/programs/source/Trimmomatic-0.39/adapters/TruSeq3-SE.fa' # default for Illumina RNA-seq
-CORES=16
+ADAPTER='/home/yuanh/programs/source/Trimmomatic-0.39/adapters/TruSeq3-PE-2.fa' # default for Illumina RNA-seq
 GENOME_DIR='/scratch4/yuanh/star_index/GRCh38_Ensembl99_sparseD3_sjdbOverhang99'
 STAR='/home/yuanh/programs/source/STAR-2.7.3a/bin/Linux_x86_64_static/STAR'
+OUTDIR='bams'
 STAR_out='STAR_out'
+CORES=16
 ramGB=20
 
 function show_usage() {
-    echo "Usage: ./fastq2bam_SE_star.sh --fastq <fq.gz> --sample <OUTPUT_SAMPLE_NAME> [--outdir <OUTDIR> --adapter <ADAPTER.fa> --cores <NCORES> --star <STAR_path> --genome_dir <STAR index path>]"
+    echo "Usage: ./fastq2bam_PE_star.sh --r1 <_R1.fq.gz> --r2 <_R2.fq.gz> --sample <OUTPUT_SAMPLE_NAME> [--outdir <OUTDIR> --adapter <ADAPTER.fa> --cores <NCORES> --star <STAR_path> --genome_dir <STAR index path>]"
 }
-
 
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
-        --fastq) # _.fastq.gz, required
-            FQ="$2"
+        --r1) # forward.fastq.gz, required
+            R1="$2"
+            shift
+            shift
+            ;;
+        --r2) # reverse.fastq.gz, required
+            R2="$2"
             shift
             shift
             ;;
@@ -48,7 +43,7 @@ while [[ $# -gt 0 ]]; do
             shift
             shift
             ;;
-        --adapter) # adapter fasta file, default to TruSeq3-SE.fa
+        --adapter) # adapter fasta file, default to TruSeq3-PE-2.fa
             ADAPTER="$2"
             shift
             shift
@@ -78,55 +73,68 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Check if required parameters are provided
-if [ -z "$FQ" ] || [ -z "$SAMPLE" ]; then
+if [ -z "$R1" ] || [ -z "$R2" ] || [ -z "$SAMPLE" ]; then
     echo "Missing required parameters!"
     show_usage
     exit 1
 fi
 
-# trim
-java -jar /home/yuanh/programs/source/Trimmomatic-0.39/trimmomatic-0.39.jar SE -threads ${CORES} \
-    ${FQ} \
-    ${OUTDIR}/${SAMPLE}_trim.fastq.gz \
-    ILLUMINACLIP:${ADAPTER}:2:30:7 SLIDINGWINDOW:3:15 MINLEN:36
+########
+# trim #
+########
+mkdir ${OUTDIR}
+
+java -jar /home/yuanh/programs/source/Trimmomatic-0.39/trimmomatic-0.39.jar PE -threads ${CORES} \
+    ${R1} ${R2} \
+    ${OUTDIR}/${SAMPLE}_R1_paired.fq.gz ${OUTDIR}/${SAMPLE}_R1_unpaired.fq.gz \
+    ${OUTDIR}/${SAMPLE}_R2_paired.fq.gz ${OUTDIR}/${SAMPLE}_R2_unpaired.fq.gz \
+    ILLUMINACLIP:${ADAPTER}:2:30:10:2:True LEADING:3 TRAILING:3 MINLEN:36
 
 ##########
 # fastqc #
 ##########
-fastqc -q -t ${CORES} -o ${OUTDIR} ${OUTDIR}/${SAMPLE}_trim.fastq.gz
+fastqc -q -t ${CORES} -o ${OUTDIR} ${OUTDIR}/${SAMPLE}_R1_paired.fq.gz
+fastqc -q -t ${CORES} -o ${OUTDIR} ${OUTDIR}/${SAMPLE}_R2_paired.fq.gz
 
 #############
 # alignment #
 #############
 # params based on ENCODE: https://github.com/ENCODE-DCC/rna-seq-pipeline/blob/dev/src/align.py
-${STAR} --genomeLoad NoSharedMemory --genomeDir ${GENOME_DIR} \
-    --readFilesIn ${OUTDIR}/${SAMPLE}_trim.fastq.gz \
+
+mkdir ${STAR_out}
+${STAR} --genomeDir ${GENOME_DIR} \
+    --readFilesIn ${OUTDIR}/${SAMPLE}_R1_paired.fq.gz ${OUTDIR}/${SAMPLE}_R2_paired.fq.gz \
     --readFilesCommand zcat \
     --runThreadN ${CORES} \
-    --outFileNamePrefix ${STAR_out}/${SAMPLE}_ \
+    --genomeLoad NoSharedMemory \
     --outFilterMultimapNmax 20 \
     --alignSJoverhangMin 8 \
     --alignSJDBoverhangMin 1 \
-    --outFilterMismatchNmax 999 \
-    --outFilterMismatchNoverReadLmax 0.04 \
+    --outFilterMismatchNmax 10 \
+    --outFilterMismatchNoverReadLmax 1 \
     --alignIntronMin 20 \
     --alignIntronMax 1000000 \
     --alignMatesGapMax 1000000 \
     --outFilterType BySJout \
-    --sjdbScore 1 \
-    --limitBAMsortRAM ${ramGB}000000000
     --outSAMtype BAM SortedByCoordinate \
+    --sjdbScore 1 \
+    --limitBAMsortRAM ${ramGB}000000000 \
     --outStd BAM_SortedByCoordinate \
+    --outFileNamePrefix ${STAR_out}/${SAMPLE}_ \
     --outSAMstrandField intronMotif > ${OUTDIR}/${SAMPLE}.bam
 
-#############
-# filtering #
-#############
-# filtering: -F 0x204 removes 1) reads that don't map. 2) QC failed reads.
+##########
+# filter #
+##########
+# filtering:
+# -f 0x02 only keep reads mapped in proper pair. 
+# -q 20 only keep fragments where the total q of two mates are > 20.
+
 BAM=${OUTDIR}/${SAMPLE}.bam
-samtools view -h ${BAM}|samtools view -bh -F 0x204 -q 10 -S - > ${BAM/.bam/.filter.bam}
+samtools view -h ${BAM}|samtools view -bh -f 0x02 -q 20 -S - > ${BAM/.bam/.filter.bam}
 samtools index ${BAM/.bam/.filter.bam}
 samtools flagstat ${BAM/.bam/.filter.bam} > ${BAM/.bam/.filter.flagstat}
 
+# remove intermediate files
 rm ${BAM}
-rm ${OUTDIR}/${SAMPLE}_trim.fastq.gz
+rm ${OUTDIR}/${SAMPLE}_*.gz
