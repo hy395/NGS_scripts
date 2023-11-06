@@ -13,18 +13,16 @@ read_narrowPeak <- function(narrowPeak_file) {
 ###########################
 # create annotation table #
 ###########################
-makeGTF1 <- function(annotation_gtf, org=org.Hs.eg.db){
-  annotationTable<-fread(annotation_gtf)
-  temp<-gsub("gene_id \"","",annotationTable$V9)
-  annotationTable$gene_id<-gsub("\".*","",temp)
-  annotationTable$symbol<-NA
-  temp<-gsub(".*transcript_id \"","",annotationTable$V9)
-  annotationTable$transcript_id<-gsub("\";","",temp)
-  map <- select(org, keys=annotationTable$gene_id, columns=c("REFSEQ","SYMBOL"), keytype="REFSEQ")
-  map <- map[!duplicated(map[,1]),]
-  rownames(map) <- map[,1]
-  annotationTable$symbol <- map[annotationTable$gene_id,2] 
-  a <- annotationTable[,list(seqname=V1,annot=V3,start=V4,end=V5,strand=V7,symbol=symbol,transcript_id=transcript_id)]
+makeGTF1 <- function(annotation_gtf){
+  gtf <- import(annotation_gtf, format='gtf')
+  a <- data.table(data.frame(seqname=seqnames(gtf), 
+                  annot=gtf$type,
+                  start=start(gtf),
+                  end=end(gtf),
+                  strand=strand(gtf),
+                  symbol=gtf$gene_name,
+                  transcript_id=gtf$transcript_id))
+    
   a$width<-abs(a$end-a$start)+1
   a<-a[a$seqname%in%c(paste0("chr", 1:22), "chrX", "chrY","chrM"),]
   return(a)
@@ -39,7 +37,12 @@ annotateSites <- function(sitesGR, annotationTab, exon_ovlp_ratio_threshold=0.5)
   if (is.null(names(sitesGR))) {
     stop("peak names must be specified!")
   }
-  
+
+  chrs <- levels(seqnames(sitesGR))
+  if (sum(!chrs %in% paste0('chr', c(1:22,'X','Y', 'M')))>0) {
+    stop("only keep peaks in chr1-22,X,Y,M!")
+  }
+    
   # change it to a transcript table, where all rows of the same transcript becomes the same, with the same start and end site
   #transcripts <- annotationTab[, list(start = min(start), end = max(end), symbol = symbol), by = list(transcript_id, seqname, strand)]
   transcripts <- unique(annotationTab[, list(start = min(start), end = max(end), symbol = symbol), by = list(transcript_id, seqname, strand)])
@@ -154,10 +157,10 @@ annotateSites <- function(sitesGR, annotationTab, exon_ovlp_ratio_threshold=0.5)
   return(output_table)
 }
 
-add_annot1 <- function(atlas, annotation_gtf="/home/yuanh/programs/genomes/hg38/hg38_refGene.gtf", org=org.Hs.eg.db) {
+add_annot1 <- function(atlas, annotation_gtf="/home/yuanh/programs/genomes/hg38/hg38_refGene.gtf") {
   # use REFSEQ annotation here.
   # only consider annotated genes.
-  annot <- makeGTF1(annotation_gtf, org)
+  annot <- makeGTF1(annotation_gtf)
   annot <- annot[!is.na(symbol),]
   annot <- annot[symbol!=""]
   

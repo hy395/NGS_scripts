@@ -9,7 +9,7 @@
 
 # param defaults
 ADAPTER='/home/yuanh/programs/source/Trimmomatic-0.39/adapters/TruSeq3-PE-2.fa' # default for Illumina RNA-seq
-GENOME_DIR='/scratch4/yuanh/star_index/GRCh38_Ensembl99_sparseD3_sjdbOverhang99'
+GENOME_DIR='/scratch4/yuanh/star_index/star41'
 STAR='/home/yuanh/programs/source/STAR-2.7.3a/bin/Linux_x86_64_static/STAR'
 OUTDIR='bams'
 STAR_out='STAR_out'
@@ -120,8 +120,7 @@ ${STAR} --genomeDir ${GENOME_DIR} \
     --sjdbScore 1 \
     --limitBAMsortRAM ${ramGB}000000000 \
     --outStd BAM_SortedByCoordinate \
-    --outFileNamePrefix ${STAR_out}/${SAMPLE}_ \
-    --outSAMstrandField intronMotif > ${OUTDIR}/${SAMPLE}.bam
+    --outFileNamePrefix ${STAR_out}/${SAMPLE}_ > ${OUTDIR}/${SAMPLE}.bam
 
 ##########
 # filter #
