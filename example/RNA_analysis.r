@@ -142,4 +142,4 @@ genGseaFiles(dds_filter, colData(dds_filter)$cond, "GSEA/")
 runGSEA("GSEA/labels.cls", "GSEA/expr.txt", "~/programs/genomes/msigdb/c2.all.v6.1.symbols.gmt", "#A_versus_S", 1024, "gene_set", "c2", "GSEA/c2")
 runGSEA("GSEA/labels.cls", "GSEA/expr.txt", "~/programs/genomes/msigdb/c5.all.v6.1.symbols.gmt", "#A_versus_S", 1024, "gene_set", "c5", "GSEA/c5")
 runGSEA("GSEA/labels.cls", "GSEA/expr.txt", "~/programs/genomes/msigdb/c7.all.v6.1.symbols.gmt", "#A_versus_S", 1024, "gene_set", "c7", "GSEA/c7")
-
+cc

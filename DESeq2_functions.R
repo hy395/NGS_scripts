@@ -39,8 +39,8 @@ fpkmFilter<-function(dds,minSample,minFPKM){
 ####################################
 # filter based on normalized count #
 ####################################
-countFilterRange<-function(DESeqDataSet,minSample,countRange){
-  counts<-counts(DESeqDataSet,normalized=T)
+countFilterRange<-function(DESeqDataSet,minSample,countRange, normalize=T){
+  counts<-counts(DESeqDataSet,normalized=normalize)
   genes.left<-vector()
   for (i in countRange){
     rows<-rowSums(counts>=i)>=minSample  
@@ -48,8 +48,8 @@ countFilterRange<-function(DESeqDataSet,minSample,countRange){
   }
   return( cbind(countRange,genes.left) )
 }
-countFilter<-function(DESeqDataSet,minSample,minCount){
-  counts<-counts(DESeqDataSet,normalized=T)
+countFilter<-function(DESeqDataSet,minSample,minCount, normalize=T){
+  counts<-counts(DESeqDataSet,normalized=normalize)
   rows<-rowSums(counts>=minCount)>=minSample
   cat(sprintf("total genes: %i\nremaining genes: %i\n",length(rows),sum(rows)))
   return (DESeqDataSet[rows,] )
@@ -97,7 +97,6 @@ volcano<-function(res.df,log2FoldThres,padjThres,sig.genes=NULL,main){
 ###############
 # GO analysis #
 ###############
-
 runGOstats <- function(genes, genes.all, conditional = TRUE, p.value =
                          0.05, ontology = 'BP',
                        annotation = 'org.Hs.eg.db',
@@ -256,19 +255,19 @@ runGSEA <- function(label_file, expr_file, gmt_file, compare, mem_size, permute_
 ################
 # GSEA prerank #
 ################
-gseaPrerank <- function(named_log2fc, outdir, gmt_file, rpt_label, mem_size) {
+gseaPrerank <- function(named_log2fc, outdir, gmt_file, rpt_label, mem_size, max_size=2000) {
   dir.create(outdir, recursive=T)
   towrite <- cbind(names(named_log2fc), round(named_log2fc,3))
-  write.table(towrite, file=paste0(outdir,"rank_list.rnk"), sep="\t", col.names=F, row.names=F, quote=F)
+  write.table(towrite, file=paste0(outdir,"/rank_list.rnk"), sep="\t", col.names=F, row.names=F, quote=F)
   
   cmd <- paste0("java -cp /home/yuanh/programs/bin/gsea-3.0.jar -Xmx" , mem_size, "m xtools.gsea.GseaPreranked",
                 " -gmx ",gmt_file,
-                " -rnk ", outdir, "rank_list.rnk",
+                " -rnk ", outdir, "/rank_list.rnk",
                 " -rpt_label ", rpt_label,
                 " -out ",outdir,
-		" -set_max 2000",
+                " -set_max ", max_size,
                 " -gui false")
-  system(cmd) 
+  system(cmd)
 }
 #gseaPrerank(res[[1]], "GSEA_prerank/AvP/", "~/programs/genomes/msigdb/c2_c5.gmt", "A_versus_P", 1024)
 
